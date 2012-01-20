@@ -25,6 +25,7 @@ BANNER
   opts.on("-o", "--test-options '[OPTIONS]'", "execute test commands with those options"){|arg| options[:test_options] = arg }
   opts.on("-t", "--type [TYPE]", "which type of tests to run? test, spec or features"){|type| options[:type] = type }
   opts.on("--non-parallel", "execute same commands but do not in parallel, needs --exec"){|type| options[:non_parallel] = true }
+  opts.on('-g', '--engines [ENGINES_NAME]', 'name of engines directory (if present, defaults to engines)'){|arg| options[:engines] = arg }
   opts.on('-v', '--version', 'Show Version'){ puts ParallelTests::VERSION; exit}
   opts.on("-h", "--help", "Show this.") { puts opts; exit }
 end.parse!
@@ -59,10 +60,24 @@ else
 
   start = Time.now
 
-  tests_folder = File.join(options[:path_prefix].to_s)
+  tests_folder = task
   tests_folder = File.join(options[:root], tests_folder) unless options[:root].to_s.empty?
-
   groups = klass.tests_in_groups(options[:files] || tests_folder, num_processes, :no_sort => options[:no_sort])
+
+  engines = options[:engines] || 'engines'
+
+  engines_folder = File.join(options[:root], engines) unless options[:root].to_s.empty?
+
+  if File.exists? engines_folder
+    Dir.entries(engines_folder).reject{|entry| %w(. ..).include? entry}.each do |dir|
+      test_folder = File.join(engines_folder, dir, task)
+      integration_folder = File.join(engines_folder, dir, 'integration')
+
+      groups += klass.tests_in_groups(test_folder, 1, :no_sort => true) if File.exists? test_folder
+      groups += klass.tests_in_groups(integration_folder, 1, :no_sort => true) if File.exists? integration_folder
+    end
+  end
+
   num_processes = groups.size
 
   #adjust processes to groups
